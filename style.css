@@ -1,0 +1,176 @@
+/* Объявление CSS переменных */
+:root {
+    /* Цвета для тем */
+    --color-spbu-red: #AF2C22;
+    --color-spbu-text: #FFFFFF;
+    --color-azure: #8df2e9; /* Фон 18 века */
+    --color-azure-text: #005f6a; /* Темный текст для 18 века */
+    --color-gold: #f2e382;
+    --color-gold-text: #000000;
+    --color-silver: #C0C0C0;
+    --color-silver-text: #2F4F4F;
+    /* Главные переменные темы (начинаем с дефолта) */
+    --theme-bg-color: var(--color-spbu-red);
+    --theme-text-color: var(--color-spbu-text);
+}
+/* Базовые стили */
+* { box-sizing: border-box; }
+html, body {
+    height: 100%; margin: 0; padding: 0; font-family: sans-serif; display: flex; flex-direction: column;
+}
+.container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 15px; }
+
+/* Шапка (С УСИЛЕННОЙ СПЕЦИФИЧНОСТЬЮ) */
+body > #header {
+    background-color: var(--theme-bg-color);
+    color: var(--theme-text-color);
+    padding: 10px 0;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    flex-shrink: 0;
+    z-index: 1001;
+    position: relative;
+}
+.header-container { display: flex; justify-content: space-between; align-items: center; }
+#header-title { font-size: 1.5em; font-weight: bold; }
+/* Кнопки шапки */
+#mode-selector button.mode-btn { background: none; border: 1px solid var(--theme-text-color); color: var(--theme-text-color); opacity: 0.8; padding: 5px 12px; margin-left: 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; transition: background-color 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s; }
+#mode-selector button.mode-btn:hover { opacity: 1; background-color: rgba(255, 255, 255, 0.1); }
+#mode-selector button.mode-btn.active { opacity: 1; background-color: var(--theme-text-color); color: var(--theme-bg-color); border-color: var(--theme-text-color); font-weight: bold; }
+
+/* Основной контент */
+#main-content {
+    flex-grow: 1;
+    position: relative;
+    display: flex;
+    overflow: hidden;
+    /* padding-bottom: 100px; */ /* УБРАН отступ для подвала */
+}
+/* Карта */
+#map { flex-grow: 1; height: 100%; z-index: 1; }
+/* Кнопка фильтров */
+#filter-toggle-btn { position: absolute; top: 10px; left: 10px; z-index: 900; background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 8px 12px; cursor: pointer; box-shadow: 0 1px 5px rgba(0,0,0,0.2); font-size: 0.9em; }
+#filter-toggle-btn:hover { background-color: #f4f4f4; }
+/* Панель фильтров */
+#filter-panel { position: absolute; top: 50px; left: 10px; z-index: 900; background-color: white; border: 1px solid #ccc; border-radius: 5px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); max-height: calc(100% - 70px); max-width: 300px; overflow-y: auto; transition: transform 0.3s ease-out, opacity 0.3s ease-out; transform: translateX(-110%); opacity: 0; }
+#filter-panel:not(.hidden) { transform: translateX(0); opacity: 1; }
+#filter-panel-close-btn { position: absolute; top: 5px; right: 8px; background: none; border: none; font-size: 20px; line-height: 1; cursor: pointer; padding: 2px; color: #aaa; }
+#filter-panel-close-btn:hover { color: #333; }
+#filter-panel h3 { margin-top: 0; margin-bottom: 15px; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+.filter-section { margin-bottom: 15px; }
+.filter-section h4 { margin-top: 0; margin-bottom: 8px; font-size: 0.95em; color: #555; }
+.filter-options { max-height: 150px; overflow-y: auto; padding-right: 5px; }
+.filter-options label { display: block; margin-bottom: 5px; font-size: 0.9em; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.filter-options input[type="checkbox"] { margin-right: 5px; vertical-align: middle; }
+#reset-filters-btn { display: block; width: 100%; margin-top: 15px; padding: 8px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+#reset-filters-btn:hover { background-color: #5a6268; }
+
+/* Сайдбар */
+#sidebar {
+    padding-bottom: 100px; /* Отступ снизу сайдбара */
+    position: fixed; top: 0; right: 0; width: 350px; max-width: 90%; height: 100%; background-color: white; box-shadow: -3px 0 6px rgba(0, 0, 0, 0.2); padding: 20px; padding-top: 60px; /* Отступ для шапки */ overflow-y: auto; transform: translateX(100%); transition: transform 0.3s ease-in-out; z-index: 1000;
+}
+#sidebar:not(.hidden) { transform: translateX(0); }
+#close-sidebar { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; line-height: 1; cursor: pointer; padding: 5px; color: #888; }
+#close-sidebar:hover { color: #333; }
+/* Стили контента сайдбара */
+#sidebar img#sidebar-photo { display: none; margin-bottom: 15px; border: 1px solid #eee; border-radius: 4px; max-width: 100%; height: auto; }
+#sidebar img#sidebar-photo.visible { display: block; }
+#sidebar h2 { margin-top: 0px; margin-bottom: 15px; font-size: 1.3em; border-bottom: 1px solid #eee; padding-bottom: 10px; word-wrap: break-word; }
+#sidebar-content p { margin: 8px 0; line-height: 1.5; }
+#sidebar-content p.hidden-info { display: none; }
+#sidebar-content strong { color: #555; }
+#sidebar-description { margin-top: 5px; font-size: 0.95em; color: #333; white-space: pre-wrap; word-wrap: break-word; }
+
+/* Легенда */
+#legend {
+    position: absolute;
+    bottom: 10px; /* Отступ снизу */
+    right: 10px;  /* Отступ справа (изначальный) */
+    background-color: rgba(255, 255, 255, 0.85);
+    border-radius: 5px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+    z-index: 900;
+    padding: 8px;
+    width: 40px;
+    overflow: hidden;
+    transition: width 0.3s ease-in-out, padding 0.3s ease-in-out, right 0.3s ease-in-out; /* Анимация right */
+    cursor: pointer;
+}
+/* Стиль для сдвинутой легенды */
+#legend.shifted-left {
+    right: 370px; /* Ширина сайдбара (350) + Отступ (10) + Исходный отступ (10) */
+}
+/* Остальные стили легенды */
+#legend .legend-title { display: none; font-weight: bold; margin-bottom: 8px; font-size: 0.95em; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 5px; white-space: nowrap; }
+#legend .legend-item { display: flex; align-items: center; margin-bottom: 6px; height: 20px; overflow: hidden; }
+#legend .legend-item:last-child { margin-bottom: 0; }
+#legend .legend-icon { display: inline-block; width: 18px; height: 18px; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; flex-shrink: 0; }
+#legend .legend-label { font-size: 0.85em; margin-left: 8px; white-space: nowrap; opacity: 0; transition: opacity 0.2s ease-in-out 0.1s; }
+#legend:hover { width: 200px; padding: 10px 15px; cursor: default; }
+#legend:hover .legend-title { display: block; }
+#legend:hover .legend-label { opacity: 1; }
+.legend-icon.icon-type-дом { -webkit-mask-image: url('icons/home.svg'); mask-image: url('icons/home.svg'); background-color: #8B4513; }
+.legend-icon.icon-type-здание { -webkit-mask-image: url('icons/building.svg'); mask-image: url('icons/building.svg'); background-color: #708090; }
+.legend-icon.icon-type-памятник { -webkit-mask-image: url('icons/memorial.svg'); mask-image: url('icons/memorial.svg'); background-color: #4682B4; }
+.legend-icon.icon-type-театр { -webkit-mask-image: url('icons/theater.svg'); mask-image: url('icons/theater.svg'); background-color: #800080; }
+.legend-icon.icon-type-другое { -webkit-mask-image: url('icons/point.svg'); mask-image: url('icons/point.svg'); background-color: #228B22; }
+.legend-icon.icon-type-кладбище { -webkit-mask-image: url('icons/cemetery.svg'); mask-image: url('icons/cemetery.svg'); background-color: #696969; }
+.legend-icon.icon-type-библиотека { -webkit-mask-image: url('icons/library.svg'); mask-image: url('icons/library.svg'); background-color: #DAA520; }
+.legend-icon.icon-type-церковь { -webkit-mask-image: url('icons/church.svg'); mask-image: url('icons/church.svg'); background-color: #B8860B;}
+.legend-icon.icon-type-учебное_заведение { -webkit-mask-image: url('icons/education.svg'); mask-image: url('icons/education.svg'); background-color: #5F9EA0;}
+
+/* Маркеры (КАСТОМНЫЕ ИКОНКИ) */
+.custom-div-icon { background: none !important; border: none !important; margin: 0; padding: 0; line-height: 0; }
+.marker-icon { display: block !important; width: 100%; height: 100%; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+.marker-icon.icon-type-home { -webkit-mask-image: url('icons/home.svg'); mask-image: url('icons/home.svg'); background-color: #8B4513; }
+.marker-icon.icon-type-building { -webkit-mask-image: url('icons/building.svg'); mask-image: url('icons/building.svg'); background-color: #708090; }
+.marker-icon.icon-type-memorial { -webkit-mask-image: url('icons/memorial.svg'); mask-image: url('icons/memorial.svg'); background-color: #4682B4; }
+.marker-icon.icon-type-theater { -webkit-mask-image: url('icons/theater.svg'); mask-image: url('icons/theater.svg'); background-color: #800080; }
+.marker-icon.icon-type-другое { -webkit-mask-image: url('icons/point.svg'); mask-image: url('icons/point.svg'); background-color: #228B22; }
+.marker-icon.icon-type-cemetery { -webkit-mask-image: url('icons/cemetery.svg'); mask-image: url('icons/cemetery.svg'); background-color: #696969; }
+.marker-icon.icon-type-library { -webkit-mask-image: url('icons/library.svg'); mask-image: url('icons/library.svg'); background-color: #DAA520; }
+.marker-icon.icon-type-church { -webkit-mask-image: url('icons/church.svg'); mask-image: url('icons/church.svg'); background-color: #B8860B;}
+.marker-icon.icon-type-education { -webkit-mask-image: url('icons/education.svg'); mask-image: url('icons/education.svg'); background-color: #5F9EA0;}
+
+
+/* Подвал (С УСИЛЕННОЙ СПЕЦИФИЧНОСТЬЮ И СХЛОПЫВАНИЕМ) */
+body > #footer {
+    background-color: var(--theme-bg-color);
+    color: var(--theme-text-color);
+    /* Стили для СВЕРНУТОГО состояния */
+    height: 15px;
+    overflow: hidden;
+    padding: 0; /* Убираем отступы */
+    cursor: pointer;
+    /* Базовые стили */
+    text-align: center;
+    font-size: 0.85em;
+    line-height: 1.4;
+    /* Плавные переходы */
+    transition: background-color 0.3s ease, color 0.3s ease, height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    flex-shrink: 0;
+    z-index: 1001;
+    position: relative;
+}
+
+/* Стиль текста (<p>) ВНУТРИ подвала */
+#footer p {
+    margin: 3px 0;
+    opacity: 0; /* Текст невидимый по умолчанию */
+    transition: opacity 0.1s ease-in-out;
+}
+
+/* Стиль подвала при НАВЕДЕНИИ */
+body > #footer:hover {
+    height: 100px; /* Развернутая высота */
+    padding: 15px 0; /* Возвращаем верт. отступы */
+    cursor: default;
+    display: block; /* Чтобы текст выравнивался */
+    text-align: center;
+}
+
+/* Стиль текста (<p>) при НАВЕДЕНИИ на подвал */
+body > #footer:hover p {
+    opacity: 1; /* Текст видимый */
+    transition-delay: 0.1s; /* Небольшая задержка появления */
+}

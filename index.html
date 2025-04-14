@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Литературный Петербург - Интерактивная Карта</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+
+    <!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <!-- (Обязательно подключить ОБА CSS файла для MarkerCluster) -->
+
+    <!-- Наши стили -->
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+
+    <!-- Шапка (без изменений) -->
+    <header id="header">
+        <div class="container header-container">
+            <div id="header-title">Литературный Петербург</div>
+            <nav id="mode-selector">
+                <button class="mode-btn active" data-mode="all" title="Показать все эпохи">Все эпохи</button>
+                <button class="mode-btn" data-mode="1" title="Показать объекты XVIII века">XVIII век</button>
+                <button class="mode-btn" data-mode="2" title="Показать объекты XIX века">XIX век</button>
+                <button class="mode-btn" data-mode="3" title="Показать объекты XX века">XX век</button>
+                <button class="mode-btn" data-mode="library" title="Показать только библиотеки">Библиотеки</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Основной контент (без изменений) -->
+    <main id="main-content">
+        <div id="map"></div>
+        <button id="filter-toggle-btn" title="Показать/скрыть фильтры">Фильтры</button>
+        <div id="filter-panel" class="hidden">
+            <button id="filter-panel-close-btn" title="Закрыть фильтры">×</button>
+            <h3>Фильтры</h3>
+            <div class="filter-section">
+                <h4>По типу объекта</h4>
+                <div id="filter-types" class="filter-options">Загрузка...</div>
+            </div>
+            <div class="filter-section">
+                <h4>По деятелям</h4>
+                <div id="filter-writers" class="filter-options">Загрузка...</div>
+            </div>
+            <div class="filter-section">
+                <h4>По произведениям</h4>
+                <div id="filter-books" class="filter-options">Загрузка...</div>
+            </div>
+            <button id="reset-filters-btn">Сбросить фильтры панели</button>
+        </div>
+        <div id="sidebar" class="hidden">
+            <button id="close-sidebar" title="Закрыть">×</button>
+            <img id="sidebar-photo" src="" alt="Фото объекта">
+            <h2 id="sidebar-title">Название объекта</h2>
+            <div id="sidebar-content">
+                <p id="p-sidebar-type" class="hidden-info"><strong>Место жительства/Тип:</strong> <span id="sidebar-type"></span></p>
+                <p id="p-sidebar-writer" class="hidden-info"><strong>Связанные личности:</strong> <span id="sidebar-writer"></span></p>
+                <p id="p-sidebar-book" class="hidden-info"><strong>Произведение:</strong> <span id="sidebar-book"></span></p>
+                <p id="p-sidebar-age" class="hidden-info"><strong>Век:</strong> <span id="sidebar-age"></span></p>
+                <p id="p-sidebar-year" class="hidden-info"><strong>Год:</strong> <span id="sidebar-year"></span></p>
+                <p id="p-sidebar-description" class="hidden-info"><strong>Описание:</strong></p>
+                <div id="sidebar-description"></div>
+            </div>
+        </div>
+         <div id="legend">
+            <div class="legend-title">Легенда</div>
+            <div class="legend-item">
+                <span class="legend-icon icon-type-дом"></span>
+                <span class="legend-label">Дом / Усадьба</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon icon-type-здание"></span>
+                <span class="legend-label">Здание</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon icon-type-памятник"></span>
+                <span class="legend-label">Памятник / Мемориал</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon icon-type-театр"></span>
+                <span class="legend-label">Театр</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon icon-type-другое"></span>
+                <span class="legend-label">Другое (Сад, Ориентир)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon icon-type-кладбище"></span>
+                <span class="legend-label">Кладбище</span>
+            </div>
+             <div class="legend-item">
+                <span class="legend-icon icon-type-библиотека"></span>
+                <span class="legend-label">Библиотека</span>
+            </div>
+             <div class="legend-item">
+                 <span class="legend-icon icon-type-церковь"></span>
+                 <span class="legend-label">Церковь</span>
+            </div>
+            <div class="legend-item">
+                 <span class="legend-icon icon-type-учебное_заведение"></span>
+                 <span class="legend-label">Учебное заведение</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Подвал (без изменений) -->
+    <footer id="footer">
+        <div class="container">
+            <p>Курсовая работа бакалавра III курса</p>
+            <p>Картографирование историко-культурного наследия на примере Санкт-Петербурга: Литературный Петербург</p>
+            <p>Выполнил: Муханин Евгений Андреевич, 2025</p>
+        </div>
+    </footer>
+
+    <!-- JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- MarkerCluster JS (подключаем ПЕРЕД нашим script.js) -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <!-- Наш скрипт -->
+    <script src="script.js"></script>
+
+</body>
+</html>
