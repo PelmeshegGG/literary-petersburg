@@ -17,7 +17,7 @@
                 <button class="world-btn active" data-world="day">Быль ☀️</button>
                 <button class="world-btn" data-world="night">Сказка 🌙</button>
             </div>
-            <div style="width: 45px;"></div> <!-- для центровки -->
+            <div style="width: 45px;"></div> <!-- для центровки селектора -->
         </div>
     </header>
 
@@ -32,29 +32,6 @@
             <p>Выполнил: Муханин Евгений Андреевич, 2026</p>
         </div>
     </footer>
-
-    <!-- ПАНЕЛЬ ФИЛЬТРОВ -->
-    <div id="filter-panel">
-        <h4>Фильтры</h4>
-        <div class="filter-section" id="filter-type">
-            <strong>Тип</strong>
-            <label><input type="checkbox" checked data-filter="type" data-value="all"> Выбрать всё</label>
-            <div id="type-checkboxes"></div>
-        </div>
-        <div class="filter-section" id="filter-author">
-            <strong>Автор</strong>
-            <label><input type="checkbox" checked data-filter="litraturer" data-value="all"> Выбрать всё</label>
-            <div id="author-checkboxes"></div>
-        </div>
-        <div class="filter-section" id="filter-book" style="display:none;">
-            <strong>Книга</strong>
-            <label><input type="checkbox" checked data-filter="night_book" data-value="all"> Выбрать всё</label>
-            <div id="book-checkboxes"></div>
-        </div>
-    </div>
-
-    <!-- ЛЕГЕНДА (иконки) -->
-    <div id="legend-panel"></div>
 
     <script src="setup.js"></script>
     <script src="custom_day_map.js"></script>

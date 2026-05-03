@@ -1,111 +1,398 @@
-// script.js
-console.log("1. Логика запущена");
-
-/**
- * ФУНКЦИЯ-ЛЕЧИЛКА
- * Твои стили содержат ошибки (использование rank/size без проверки на null).
- * Эта функция проходит по слоям и подставляет 0 там, где MapLibre может упасть.
- */
-function fixStyleErrors(style) {
-    if (!style || !style.layers) return style;
-    style.layers.forEach(layer => {
-        // Чиним сортировку POI (самая частая причина ошибки 'found null')
-        if (layer.layout && layer.layout['symbol-sort-key']) {
-            layer.layout['symbol-sort-key'] = ["coalesce", layer.layout['symbol-sort-key'], 0];
-        }
-        // Чиним прозрачность текста
-        if (layer.paint && layer.paint['text-opacity']) {
-            if (Array.isArray(layer.paint['text-opacity']) && layer.paint['text-opacity'][0] === 'interpolate') {
-                // Если внутри интерполяции есть get, который может вернуть null, это опасно.
-                // Но обычно зум (zoom) там всегда есть.
-            }
+// --- Функция-лечилка стилей ---
+function fixStyle(style) {
+    const s = JSON.parse(JSON.stringify(style));
+    if (!s.layers) return s;
+    s.layers.forEach(l => {
+        if (l.layout && l.layout['symbol-sort-key']) {
+            l.layout['symbol-sort-key'] = ["coalesce", l.layout['symbol-sort-key'], 0];
         }
     });
-    return style;
+    return s;
 }
 
-// Применяем лечилку к твоим стилям перед инициализацией
-const CLEAN_DAY_STYLE = fixStyleErrors(MY_FINAL_DAY_STYLE);
-const CLEAN_NIGHT_STYLE = fixStyleErrors(MY_FINAL_NIGHT_STYLE);
+// --- Сопоставление русских типов и имён файлов иконок ---
+const TYPE_TO_ICON = {
+    "Захоронение": "zahoroneniya",
+    "Памятник": "pamyatnik",
+    "Мемориальная табличка": "memorialnaya_tablichka",
+    "Место действия": "mesto_deystviya",
+    "Ориентир": "orientir"
+};
 
-// 1. Инициализация карты
+// --- Глобальная переменная для данных ---
+let literaryData = null;
+
+// --- Загрузка GeoJSON ---
+async function loadLiteraryData() {
+    try {
+        const response = await fetch('literary_places.geojson');
+        literaryData = await response.json();
+        console.log('✅ GeoJSON загружен, всего точек:', literaryData.features.length);
+    } catch (err) {
+        console.error('❌ Ошибка загрузки GeoJSON:', err);
+    }
+}
+
+// --- Обработка свойств точек: авторы, типы, иконки ---
+function processFeatures(features) {
+    features.forEach(f => {
+        const props = f.properties;
+
+        // 1. Разбиваем авторов в массив
+        if (props.litraturer) {
+            props.litraturer_array = props.litraturer.split(', ').map(s => s.trim());
+        } else {
+            props.litraturer_array = [];
+        }
+
+        // 2. Типы: разбор составного поля type
+        const rawTypes = (props.type || '').split(',').map(s => s.trim()).filter(Boolean);
+        let dayType = null, nightType = null;
+        if (rawTypes.length === 2) {
+            dayType = rawTypes[0];      // первый – дневной
+            nightType = rawTypes[1];    // второй – ночной
+        } else if (rawTypes.length === 1) {
+            const t = rawTypes[0];
+            if (["Захоронение", "Памятник", "Мемориальная табличка"].includes(t)) {
+                dayType = t;
+            } else if (["Место действия", "Ориентир"].includes(t)) {
+                nightType = t;
+            } else {
+                // если тип не опознан, считаем его дневным по умолчанию
+                dayType = t;
+            }
+        }
+
+        // 3. Если объект должен быть в ночном мире, но night_type не задан,
+        //    назначаем ему ночной тип "Место действия" (автоматически)
+        if (props.has_night === 1 && !nightType) {
+            // Если есть dayType, который обычно дневной, то для ночи даём "Место действия"
+            // Если нет вообще ни одного типа, тоже "Место действия"
+            nightType = "Место действия";
+        }
+
+        props.day_type = dayType;
+        props.night_type = nightType;
+        props.day_icon = dayType ? TYPE_TO_ICON[dayType] : null;
+        props.night_icon = nightType ? TYPE_TO_ICON[nightType] : null;
+    });
+}
+
+// --- Загрузка иконок ---
+async function loadIcons() {
+    const promises = [];
+    for (const [typeName, fileName] of Object.entries(TYPE_TO_ICON)) {
+        promises.push(new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                map.addImage(fileName, img);
+                resolve();
+            };
+            img.onerror = () => {
+                console.warn(`Иконка "${typeName}" не найдена, использую заглушку`);
+                const canvas = document.createElement('canvas');
+                canvas.width = 20; canvas.height = 20;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#AF2C22';
+                ctx.beginPath(); ctx.arc(10, 10, 8, 0, 2 * Math.PI); ctx.fill();
+                map.addImage(fileName, canvas);
+                resolve();
+            };
+            img.src = `icons/${fileName}.svg`;
+        }));
+    }
+    await Promise.all(promises);
+    console.log('🖼 Все иконки обработаны');
+}
+
+// --- Добавление слоя на карту ---
+function addLiteraryPoints() {
+    if (!literaryData) {
+        console.warn('⚠️ literaryData ещё не загружен');
+        return;
+    }
+
+    if (map.getLayer('literary-points-circle')) map.removeLayer('literary-points-circle');
+    if (map.getSource('literary-points')) map.removeSource('literary-points');
+
+    map.addSource('literary-points', {
+        type: 'geojson',
+        data: literaryData
+    });
+
+    map.addLayer({
+        id: 'literary-points-circle',
+        type: 'symbol',
+        source: 'literary-points',
+        layout: {
+            'icon-image': ['get', 'day_icon'],   // будет меняться динамически
+            'icon-size': 0.15,
+            'icon-allow-overlap': true,
+            'text-field': ['get', 'name'],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': 12,
+            'text-offset': [0, 1.8],
+            'text-anchor': 'top',
+            'text-optional': true
+        },
+        paint: {
+            'text-color': '#111111',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 1.5
+        }
+    });
+    console.log('➕ Слой с иконками добавлен');
+}
+
+// --- Вспомогательные функции для фильтров (принимают world) ---
+function getUniqueTypes(world) {
+    const types = new Set();
+    const field = world === 'night' ? 'has_night' : 'has_day';
+    literaryData.features.forEach(f => {
+        if (f.properties[field] !== 1) return;
+        const type = world === 'night' ? f.properties.night_type : f.properties.day_type;
+        if (type) types.add(type);
+    });
+    return Array.from(types).filter(Boolean).sort();
+}
+
+function getUniqueAuthors(world) {
+    const authors = new Set();
+    const field = world === 'night' ? 'has_night' : 'has_day';
+    literaryData.features.forEach(f => {
+        if (f.properties[field] !== 1) return;
+        if (f.properties.litraturer_array) {
+            f.properties.litraturer_array.forEach(a => authors.add(a));
+        }
+    });
+    return Array.from(authors).filter(Boolean).sort();
+}
+
+function getUniqueBooks() {
+    const books = new Set();
+    literaryData.features.forEach(f => {
+        if (f.properties.night_book) books.add(f.properties.night_book);
+    });
+    return Array.from(books).filter(Boolean).sort();
+}
+
+// --- Построение интерфейса фильтров ---
+function buildFilterUI(world) {
+    console.log('🏗 buildFilterUI начал работу для мира:', world);
+    const typeDiv = document.getElementById('type-checkboxes');
+    const authorDiv = document.getElementById('author-checkboxes');
+    const bookDiv = document.getElementById('book-checkboxes');
+
+    // Полная очистка
+    if (typeDiv) typeDiv.replaceChildren();
+    if (authorDiv) authorDiv.replaceChildren();
+    if (bookDiv) bookDiv.replaceChildren();
+
+    // Типы
+    if (typeDiv) {
+        getUniqueTypes(world).forEach(type => {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = true;
+            input.dataset.filter = 'type';
+            input.dataset.value = type;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(' ' + type));
+            typeDiv.appendChild(label);
+        });
+    }
+
+    // Авторы
+    if (authorDiv) {
+        getUniqueAuthors(world).forEach(author => {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = true;
+            input.dataset.filter = 'litraturer';
+            input.dataset.value = author;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(' ' + author));
+            authorDiv.appendChild(label);
+        });
+    }
+
+    // Книги (только для ночи)
+    if (bookDiv && world === 'night') {
+        getUniqueBooks().forEach(book => {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = true;
+            input.dataset.filter = 'night_book';
+            input.dataset.value = book;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(' ' + book));
+            bookDiv.appendChild(label);
+        });
+    }
+
+    // === ВОТ ЭТОТ БЛОК БЫЛ ИСПОРЧЕН – ТЕПЕРЬ ОН ПРАВИЛЬНЫЙ ===
+    // Обработчики «Выбрать всё»
+    document.querySelectorAll('.filter-section input[data-value="all"]').forEach(allCb => {
+        // Клонируем элемент, чтобы гарантированно сбросить старые обработчики
+        const newAllCb = allCb.cloneNode(true);
+        allCb.parentNode.replaceChild(newAllCb, allCb);
+        newAllCb.addEventListener('change', function() {
+            const section = this.closest('.filter-section');
+            const checkboxes = section.querySelectorAll('input[type="checkbox"]:not([data-value="all"])');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+            applyFilters();
+        });
+    });
+
+    // Обработчики отдельных чекбоксов
+    document.querySelectorAll('#filter-panel input[type="checkbox"]:not([data-value="all"])').forEach(cb => {
+        cb.addEventListener('change', applyFilters);
+    });
+}
+
+// --- Легенда ---
+function buildLegend() {
+    const panel = document.getElementById('legend-panel');
+    if (!panel) return;
+    panel.innerHTML = '';
+    const types = Object.keys(TYPE_TO_ICON);
+    types.forEach(type => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        const img = document.createElement('img');
+        img.src = `icons/${TYPE_TO_ICON[type]}.svg`;
+        img.onerror = () => { img.src = 'data:image/svg+xml;base64,...'; };
+        const tooltip = document.createElement('span');
+        tooltip.className = 'legend-tooltip';
+        tooltip.textContent = type;
+        item.appendChild(img);
+        item.appendChild(tooltip);
+        panel.appendChild(item);
+    });
+}
+
+// --- Применение фильтров ---
+function applyFilters() {
+    if (!map.getLayer('literary-points-circle')) return;
+
+    const isNight = document.body.classList.contains('night-theme');
+
+    // Устанавливаем правильную иконку для текущего времени суток
+    const iconProperty = isNight ? 'night_icon' : 'day_icon';
+    map.setLayoutProperty('literary-points-circle', 'icon-image', ['get', iconProperty]);
+
+    // Собираем активные галочки
+    const activeTypes = Array.from(document.querySelectorAll('#type-checkboxes input:checked:not([data-value="all"])'))
+        .map(cb => cb.dataset.value);
+    const activeAuthors = Array.from(document.querySelectorAll('#author-checkboxes input:checked:not([data-value="all"])'))
+        .map(cb => cb.dataset.value);
+    const activeBooks = Array.from(document.querySelectorAll('#book-checkboxes input:checked:not([data-value="all"])'))
+        .map(cb => cb.dataset.value);
+
+    // Базовый фильтр мира
+    const worldFilter = isNight 
+        ? ['==', ['get', 'has_night'], 1] 
+        : ['==', ['get', 'has_day'], 1];
+
+    // Фильтр по типу (используем day_type или night_type)
+    const typeField = isNight ? 'night_type' : 'day_type'; // <-- вот эта строка была потеряна
+    const typeFilter = activeTypes.length > 0
+        ? ['match', ['get', typeField], activeTypes, true, false]
+        : ['literal', false];   // если ничего не выбрано – скрываем всё
+
+    // Фильтр по авторам (хотя бы один из выбранных)
+    const authorFilter = activeAuthors.length > 0
+        ? ['any', ...activeAuthors.map(a => ['in', a, ['get', 'litraturer_array']])]
+        : ['literal', false];
+
+    // Фильтр по книгам (только ночью)
+    let bookFilter = ['literal', true]; // по умолчанию показываем всё, если секция скрыта
+    if (isNight && activeBooks.length > 0) {
+        bookFilter = ['match', ['get', 'night_book'], activeBooks, true, false];
+    } else if (isNight && activeBooks.length === 0) {
+        bookFilter = ['literal', false]; // если ничего не выбрано – скрываем
+    }
+
+    map.setFilter('literary-points-circle', ['all', worldFilter, typeFilter, authorFilter, bookFilter]);
+    console.log('🔍 Фильтр обновлён');
+}
+
+// --- Инициализация карты ---
 const map = new maplibregl.Map({
     container: 'map',
-    style: CLEAN_DAY_STYLE, 
+    style: fixStyle(MY_FINAL_DAY_STYLE),
     center: [30.332, 59.935],
     zoom: 11,
     attributionControl: false
 });
 
-// 2. Функция принудительной отрисовки всех точек
-function forceLoadPoints() {
-    console.log("3. Загружаю GeoJSON...");
-    
-    fetch('literary_places.geojson')
-        .then(res => res.json())
-        .then(data => {
-            console.log("4. Данные считаны, объектов:", data.features.length);
-
-            if (map.getSource('places')) {
-                if (map.getLayer('points-layer')) map.removeLayer('points-layer');
-                map.removeSource('places');
-            }
-
-            map.addSource('places', { type: 'geojson', data: data });
-
-            map.addLayer({
-                id: 'points-layer',
-                type: 'circle',
-                source: 'places',
-                // НИКАКИХ ФИЛЬТРОВ - рисуем абсолютно всё
-                paint: {
-                    'circle-radius': 12,
-                    'circle-color': '#ff0000', // Ярко-красный, чтобы точно увидеть
-                    'circle-stroke-width': 3,
-                    'circle-stroke-color': '#ffffff',
-                    'circle-opacity': 1
-                }
-            });
-            console.log("5. Слой добавлен. Проверь карту!");
-        })
-        .catch(err => console.error("Ошибка Fetch:", err));
-}
-
-// События готовности
-map.on('load', forceLoadPoints);
-map.on('style.load', forceLoadPoints);
-
-// Переключатель миров
+// --- Переключение тем ---
 document.querySelectorAll('.world-btn').forEach(btn => {
     btn.onclick = () => {
         const world = btn.dataset.world;
-        console.log("Смена мира на:", world);
-        
+        console.log('🔄 Переключение на тему:', world);
+
         document.querySelectorAll('.world-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         document.body.className = world + '-theme';
-        
-        map.setStyle(world === 'day' ? CLEAN_DAY_STYLE : CLEAN_NIGHT_STYLE);
+
+        const newStyle = (world === 'day') ? MY_FINAL_DAY_STYLE : MY_FINAL_NIGHT_STYLE;
+        map.setStyle(fixStyle(newStyle));
+
+        map.once('idle', () => {
+            addLiteraryPoints();
+            // Показываем/скрываем секцию книг
+            const filterBook = document.getElementById('filter-book');
+            if (filterBook) {
+                filterBook.style.display = (world === 'night') ? 'block' : 'none';
+            }
+            // Перестраиваем фильтры под текущий мир
+            buildFilterUI(world);
+            applyFilters();
+        });
     };
 });
 
-// Тупейший клик для проверки атрибутов
-map.on('click', 'points-layer', (e) => {
-    const p = e.features[0].properties;
-    let s = "<h3>Атрибуты объекта:</h3>";
-    for (let k in p) s += `<p><b>${k}:</b> ${p[k]}</p>`;
-    
-    document.getElementById('sidebar-content').innerHTML = s;
-    document.getElementById('sidebar').classList.remove('hidden');
+// --- Первый запуск ---
+map.on('load', async () => {
+    console.log('🗺 Карта готова');
+    await loadLiteraryData();
+    if (!literaryData) return;
+    processFeatures(literaryData.features);
+    await loadIcons();
+    addLiteraryPoints();
+    // Первый запуск – дневная тема
+    buildFilterUI('day');
+    applyFilters();
+    buildLegend();
 });
 
-// Закрытие окон
-document.addEventListener('DOMContentLoaded', () => {
-    const safeClick = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
-    safeClick('close-sidebar', () => document.getElementById('sidebar').classList.add('hidden'));
-    safeClick('info-btn', () => document.getElementById('info-modal').classList.remove('hidden'));
-    safeClick('close-info', () => document.getElementById('info-modal').classList.add('hidden'));
+// --- Клик по точке (попап) ---
+map.on('click', 'literary-points-circle', (e) => {
+    const props = e.features[0].properties;
+    const isNight = document.body.classList.contains('night-theme');
+
+    const currentType = isNight ? props.night_type : props.day_type;
+    const desc = isNight ? props.night_description : props.day_description;
+
+    let html = `<h3>${props.name || ''}</h3>`;
+    if (props.title) html += `<p><em>${props.title}</em></p>`;
+    if (currentType) html += `<p><strong>Тип:</strong> ${currentType}</p>`;
+    html += `<p>${desc || ''}</p>`;
+    if (props.address) html += `<p><strong>Адрес:</strong> ${props.address}</p>`;
+    if (props.litraturer) html += `<p><strong>Писатель:</strong> ${props.litraturer}</p>`;
+    if (isNight && props.night_quote) {
+        html += `<blockquote style="font-style:italic; border-left:3px solid #AF2C22; padding-left:8px;">${props.night_quote}</blockquote>`;
+    }
+    if (props.img_url) {
+        html += `<img src="${props.img_url}" alt="${props.name}" style="max-width:200px; display:block; margin-top:8px; border-radius:4px;">`;
+    }
+    new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(map);
 });
 
-map.on('mouseenter', 'points-layer', () => map.getCanvas().style.cursor = 'pointer');
-map.on('mouseleave', 'points-layer', () => map.getCanvas().style.cursor = '');
+// --- Курсор при наведении ---
+map.on('mouseenter', 'literary-points-circle', () => map.getCanvas().style.cursor = 'pointer');
+map.on('mouseleave', 'literary-points-circle', () => map.getCanvas().style.cursor = '');
