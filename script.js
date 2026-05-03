@@ -38,19 +38,23 @@ function processFeatures(features) {
     features.forEach(f => {
         const props = f.properties;
 
-        // 1. Разбиваем авторов в массив
+        // Исправляем has_day / has_night – на случай, если пришли строки "1"
+        props.has_day = props.has_day !== null && props.has_day !== undefined ? Number(props.has_day) : null;
+        props.has_night = props.has_night !== null && props.has_night !== undefined ? Number(props.has_night) : null;
+
+        // 1. Разбиваем авторов
         if (props.litraturer) {
             props.litraturer_array = props.litraturer.split(', ').map(s => s.trim());
         } else {
             props.litraturer_array = [];
         }
 
-        // 2. Типы: разбор составного поля type
+        // 2. Типы (как раньше)
         const rawTypes = (props.type || '').split(',').map(s => s.trim()).filter(Boolean);
         let dayType = null, nightType = null;
         if (rawTypes.length === 2) {
-            dayType = rawTypes[0];      // первый – дневной
-            nightType = rawTypes[1];    // второй – ночной
+            dayType = rawTypes[0];
+            nightType = rawTypes[1];
         } else if (rawTypes.length === 1) {
             const t = rawTypes[0];
             if (["Захоронение", "Памятник", "Мемориальная табличка"].includes(t)) {
@@ -58,16 +62,12 @@ function processFeatures(features) {
             } else if (["Место действия", "Ориентир"].includes(t)) {
                 nightType = t;
             } else {
-                // если тип не опознан, считаем его дневным по умолчанию
-                dayType = t;
+                dayType = t; // неизвестный тип считаем дневным
             }
         }
 
-        // 3. Если объект должен быть в ночном мире, но night_type не задан,
-        //    назначаем ему ночной тип "Место действия" (автоматически)
+        // 3. Если объект должен быть в ночном мире, но нет nightType – даём "Место действия"
         if (props.has_night === 1 && !nightType) {
-            // Если есть dayType, который обычно дневной, то для ночи даём "Место действия"
-            // Если нет вообще ни одного типа, тоже "Место действия"
             nightType = "Место действия";
         }
 
@@ -75,6 +75,14 @@ function processFeatures(features) {
         props.night_type = nightType;
         props.day_icon = dayType ? TYPE_TO_ICON[dayType] : null;
         props.night_icon = nightType ? TYPE_TO_ICON[nightType] : null;
+
+        // 4. Проверка координат: если широта > 80, вероятно порядок неверный – меняем местами
+        if (f.geometry.coordinates[1] > 80) {
+            console.warn(`Исправляю координаты для "${props.name}" – было [${f.geometry.coordinates}], меняю на [${f.geometry.coordinates[1]}, ${f.geometry.coordinates[0]}]`);
+            const tmp = f.geometry.coordinates[0];
+            f.geometry.coordinates[0] = f.geometry.coordinates[1];
+            f.geometry.coordinates[1] = tmp;
+        }
     });
 }
 
