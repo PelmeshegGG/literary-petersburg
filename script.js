@@ -1,4 +1,12 @@
-// --- Функция-лечилка стилей ---
+// ========================
+// НАСТРОЙКИ КЛАСТЕРИЗАЦИИ (меняйте смело)
+// ========================
+const CLUSTER_MAX_ZOOM = 15;   // максимальный зум, на котором ещё работают кластеры
+const CLUSTER_RADIUS = 20;     // радиус объединения точек в пикселях
+
+// ========================
+// Функция-лечилка стилей
+// ========================
 function fixStyle(style) {
     const s = JSON.parse(JSON.stringify(style));
     if (!s.layers) return s;
@@ -10,7 +18,9 @@ function fixStyle(style) {
     return s;
 }
 
-// --- Сопоставление русских типов и имён файлов иконок ---
+// ========================
+// Сопоставление типов и иконок
+// ========================
 const TYPE_TO_ICON = {
     "Захоронение": "zahoroneniya",
     "Памятник": "pamyatnik",
@@ -19,7 +29,9 @@ const TYPE_TO_ICON = {
     "Ориентир": "orientir"
 };
 
-// --- Глобальные переменные ---
+// ========================
+// Глобальные переменные
+// ========================
 let literaryData = null;
 let currentWorld = 'day';
 const searchQueries = {};
@@ -33,7 +45,18 @@ const hoverTooltip = document.getElementById('hover-tooltip');
 const hoverImg = document.getElementById('hover-img');
 const hoverName = document.getElementById('hover-name');
 
-// --- Загрузка GeoJSON ---
+// Ссылки на обработчики событий, чтобы можно было их снимать
+let clusterClickHandler = null;
+let singlePointClickHandler = null;
+let singlePointHoverEnter = null;
+let singlePointHoverLeave = null;
+let singlePointHoverMove = null;
+let clusterHoverEnter = null;
+let clusterHoverLeave = null;
+
+// ========================
+// Загрузка GeoJSON
+// ========================
 async function loadLiteraryData() {
     try {
         const response = await fetch('literary_places.geojson');
@@ -44,23 +67,22 @@ async function loadLiteraryData() {
     }
 }
 
-// --- Обработка свойств точек ---
+// ========================
+// Обработка свойств точек
+// ========================
 function processFeatures(features) {
     features.forEach(f => {
         const props = f.properties;
 
-        // Числовые has_day / has_night
         props.has_day = props.has_day !== null && props.has_day !== undefined ? Number(props.has_day) : null;
         props.has_night = props.has_night !== null && props.has_night !== undefined ? Number(props.has_night) : null;
 
-        // Авторы в массив
         if (props.litraturer) {
             props.litraturer_array = props.litraturer.split(', ').map(s => s.trim());
         } else {
             props.litraturer_array = [];
         }
 
-        // Типы
         const rawTypes = (props.type || '').split(',').map(s => s.trim()).filter(Boolean);
         let dayType = null, nightType = null;
         if (rawTypes.length === 2) {
@@ -77,7 +99,6 @@ function processFeatures(features) {
             }
         }
 
-        // Автоназначение ночного типа
         if (props.has_night === 1 && !nightType) {
             nightType = "Место действия";
         }
@@ -87,7 +108,6 @@ function processFeatures(features) {
         props.day_icon = dayType ? TYPE_TO_ICON[dayType] : null;
         props.night_icon = nightType ? TYPE_TO_ICON[nightType] : null;
 
-        // Исправление координат
         if (f.geometry.coordinates[1] > 80) {
             console.warn(`Исправляю координаты для "${props.name}"`);
             const tmp = f.geometry.coordinates[0];
@@ -97,24 +117,32 @@ function processFeatures(features) {
     });
 }
 
-// --- Загрузка иконок ---
+// ========================
+// Загрузка иконок
+// ========================
 async function loadIcons() {
+    Object.values(TYPE_TO_ICON).forEach(name => {
+        if (map.hasImage(name)) map.removeImage(name);
+    });
+
     const promises = [];
     for (const [typeName, fileName] of Object.entries(TYPE_TO_ICON)) {
         promises.push(new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
-                map.addImage(fileName, img);
+                if (!map.hasImage(fileName)) map.addImage(fileName, img);
                 resolve();
             };
             img.onerror = () => {
                 console.warn(`Иконка "${typeName}" не найдена, использую заглушку`);
-                const canvas = document.createElement('canvas');
-                canvas.width = 20; canvas.height = 20;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#AF2C22';
-                ctx.beginPath(); ctx.arc(10, 10, 8, 0, 2 * Math.PI); ctx.fill();
-                map.addImage(fileName, canvas);
+                if (!map.hasImage(fileName)) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 20; canvas.height = 20;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#AF2C22';
+                    ctx.beginPath(); ctx.arc(10, 10, 8, 0, 2 * Math.PI); ctx.fill();
+                    map.addImage(fileName, canvas);
+                }
                 resolve();
             };
             img.src = `icons/${fileName}.svg`;
@@ -124,29 +152,104 @@ async function loadIcons() {
     console.log('🖼 Все иконки обработаны');
 }
 
-// --- Добавление слоёв на карту (С КЛАСТЕРИЗАЦИЕЙ) ---
-function addLiteraryPoints() {
-    if (!literaryData) {
-        console.warn('⚠️ literaryData ещё не загружен');
-        return;
-    }
+// ========================
+// Получение отфильтрованных точек
+// ========================
+function getFilteredData() {
+    const isNight = currentWorld === 'night';
+    const worldField = isNight ? 'has_night' : 'has_day';
 
-    // Удаляем старые слои и источник, если есть
+    const activeTypes = getSelectedValues('type-checkboxes');
+    const activeAuthors = getSelectedValues('author-checkboxes');
+    const activeBooks = getSelectedValues('book-checkboxes');
+    const typeField = isNight ? 'night_type' : 'day_type';
+
+    return literaryData.features.filter(f => {
+        const p = f.properties;
+        if (p[worldField] !== 1) return false;
+        if (activeTypes.length > 0 && !activeTypes.includes(p[typeField])) return false;
+        if (activeAuthors.length > 0) {
+            if (!p.litraturer_array || !p.litraturer_array.some(a => activeAuthors.includes(a))) return false;
+        }
+        if (isNight && activeBooks.length > 0) {
+            if (!p.night_book || !activeBooks.includes(p.night_book)) return false;
+        }
+        return true;
+    });
+}
+
+function updateSourceData() {
+    const source = map.getSource('literary-points');
+    if (!source) return;
+    const filtered = getFilteredData();
+    source.setData({
+        type: 'FeatureCollection',
+        features: filtered
+    });
+}
+
+// ========================
+// Удаление старых обработчиков событий
+// ========================
+function removeEventHandlers() {
+    if (clusterClickHandler) {
+        map.off('click', 'clusters', clusterClickHandler);
+        clusterClickHandler = null;
+    }
+    if (singlePointClickHandler) {
+        map.off('click', 'literary-points-circle', singlePointClickHandler);
+        singlePointClickHandler = null;
+    }
+    if (singlePointHoverEnter) {
+        map.off('mouseenter', 'literary-points-circle', singlePointHoverEnter);
+        singlePointHoverEnter = null;
+    }
+    if (singlePointHoverLeave) {
+        map.off('mouseleave', 'literary-points-circle', singlePointHoverLeave);
+        singlePointHoverLeave = null;
+    }
+    if (singlePointHoverMove) {
+        map.off('mousemove', 'literary-points-circle', singlePointHoverMove);
+        singlePointHoverMove = null;
+    }
+    if (clusterHoverEnter) {
+        map.off('mouseenter', 'clusters', clusterHoverEnter);
+        clusterHoverEnter = null;
+    }
+    if (clusterHoverLeave) {
+        map.off('mouseleave', 'clusters', clusterHoverLeave);
+        clusterHoverLeave = null;
+    }
+}
+
+// ========================
+// Добавление слоёв и обработчиков событий
+// ========================
+function addLiteraryPoints() {
+    // Удаляем старые слои и источник
     ['literary-points-circle', 'clusters', 'cluster-count'].forEach(id => {
         if (map.getLayer(id)) map.removeLayer(id);
     });
     if (map.getSource('literary-points')) map.removeSource('literary-points');
 
-    // Кластеризованный источник
+    // Снимаем старые обработчики, чтобы не накапливались
+    removeEventHandlers();
+
+    const worldField = currentWorld === 'night' ? 'has_night' : 'has_day';
+    const initialFeatures = literaryData.features.filter(f => f.properties[worldField] === 1);
+
     map.addSource('literary-points', {
         type: 'geojson',
-        data: literaryData,
+        data: {
+            type: 'FeatureCollection',
+            features: initialFeatures
+        },
         cluster: true,
-        clusterMaxZoom: 14,      // после этого уровня кластеры раскрываются
-        clusterRadius: 50        // радиус объединения в пикселях
+        clusterMaxZoom: CLUSTER_MAX_ZOOM,
+        clusterRadius: CLUSTER_RADIUS
     });
 
-    // --- СЛОЙ КЛАСТЕРОВ (круги) ---
+    // --- Слой кластеров (круги) ---
     map.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -156,7 +259,7 @@ function addLiteraryPoints() {
             'circle-color': [
                 'step',
                 ['get', 'point_count'],
-                '#AF2C22',   // до 10 точек – красный (основной)
+                '#AF2C22',
                 10, '#D2604A',
                 30, '#E08B79',
                 100, '#F0B5A0'
@@ -164,7 +267,7 @@ function addLiteraryPoints() {
             'circle-radius': [
                 'step',
                 ['get', 'point_count'],
-                15,        // <10   – радиус 15
+                15,
                 10, 20,
                 30, 25,
                 100, 30
@@ -174,7 +277,7 @@ function addLiteraryPoints() {
         }
     });
 
-    // --- СЛОЙ ЧИСЕЛ ВНУТРИ КЛАСТЕРОВ ---
+    // --- Слой чисел в кластерах ---
     map.addLayer({
         id: 'cluster-count',
         type: 'symbol',
@@ -190,14 +293,14 @@ function addLiteraryPoints() {
         }
     });
 
-    // --- СЛОЙ ОТДЕЛЬНЫХ ТОЧЕК (те, что не попали в кластер) ---
+    // --- Слой отдельных точек ---
     map.addLayer({
         id: 'literary-points-circle',
         type: 'symbol',
         source: 'literary-points',
-        filter: ['!', ['has', 'point_count']],   // только отдельные точки
+        filter: ['!', ['has', 'point_count']],
         layout: {
-            'icon-image': ['get', 'day_icon'],
+            'icon-image': ['get', currentWorld === 'night' ? 'night_icon' : 'day_icon'],
             'icon-size': 0.15,
             'icon-allow-overlap': true,
             'text-field': ['get', 'name'],
@@ -213,14 +316,68 @@ function addLiteraryPoints() {
             'text-halo-width': 1.5
         }
     });
+
+    // === Назначение обработчиков событий ===
+
+    // Ховер по отдельным точкам
+    singlePointHoverEnter = (e) => {
+        map.getCanvas().style.cursor = 'pointer';
+        showHoverTooltip(e);
+    };
+    map.on('mouseenter', 'literary-points-circle', singlePointHoverEnter);
+
+    singlePointHoverLeave = () => {
+        map.getCanvas().style.cursor = '';
+        hideHoverTooltip();
+    };
+    map.on('mouseleave', 'literary-points-circle', singlePointHoverLeave);
+
+    singlePointHoverMove = (e) => {
+        moveHoverTooltip(e);
+    };
+    map.on('mousemove', 'literary-points-circle', singlePointHoverMove);
+
+    // Клик по отдельной точке
+    singlePointClickHandler = (e) => {
+        if (!e.features || !e.features.length) return;
+        const props = e.features[0].properties;
+        openSlidebar(props);
+        panToFeature(e.lngLat);
+    };
+    map.on('click', 'literary-points-circle', singlePointClickHandler);
+
+    // Ховер по кластерам
+    clusterHoverEnter = () => {
+        map.getCanvas().style.cursor = 'pointer';
+    };
+    map.on('mouseenter', 'clusters', clusterHoverEnter);
+
+    clusterHoverLeave = () => {
+        map.getCanvas().style.cursor = '';
+    };
+    map.on('mouseleave', 'clusters', clusterHoverLeave);
+
+    // Клик по кластеру
+    clusterClickHandler = (e) => {
+        if (!e.features || !e.features.length) return;
+        const clusterId = e.features[0].properties.cluster_id;
+        const source = map.getSource('literary-points');
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({
+                center: e.features[0].geometry.coordinates,
+                zoom: zoom,
+                padding: { left: 30, right: 30, top: 30, bottom: 30 },
+                duration: 800
+            });
+        });
+    };
+    map.on('click', 'clusters', clusterClickHandler);
 }
 
-// --- Вспомогательные функции получения данных ---
-function getFilteredFeatures() {
-    const field = currentWorld === 'night' ? 'has_night' : 'has_day';
-    return literaryData.features.filter(f => f.properties[field] === 1);
-}
-
+// ========================
+// Вспомогательные функции
+// ========================
 function getUniqueTypes(world) {
     const types = new Set();
     const field = world === 'night' ? 'has_night' : 'has_day';
@@ -252,14 +409,15 @@ function getAllBooks() {
     return Array.from(books).filter(Boolean).sort();
 }
 
-// --- Чтение выбранных значений ---
 function getSelectedValues(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return [];
     return Array.from(container.querySelectorAll('input:checked:not([data-value="all"])')).map(cb => cb.dataset.value);
 }
 
-// --- Построение интерфейса фильтров ---
+// ========================
+// Построение UI фильтров
+// ========================
 function buildFilterUI(world, forceReset = false) {
     console.log('🏗 buildFilterUI начал работу для мира:', world);
     currentWorld = world;
@@ -268,12 +426,10 @@ function buildFilterUI(world, forceReset = false) {
     const authorDiv = document.getElementById('author-checkboxes');
     const bookDiv = document.getElementById('book-checkboxes');
 
-    // Очистка
     if (typeDiv) typeDiv.replaceChildren();
     if (authorDiv) authorDiv.replaceChildren();
     if (bookDiv) bookDiv.replaceChildren();
 
-    // Типы
     if (typeDiv) {
         getUniqueTypes(world).forEach(type => {
             const label = document.createElement('label');
@@ -288,7 +444,6 @@ function buildFilterUI(world, forceReset = false) {
         });
     }
 
-    // Авторы (всегда полный список)
     if (authorDiv) {
         getUniqueAuthors(world).forEach(author => {
             const label = document.createElement('label');
@@ -303,7 +458,6 @@ function buildFilterUI(world, forceReset = false) {
         });
     }
 
-    // Книги (только для ночи)
     if (bookDiv && world === 'night') {
         getAllBooks().forEach(book => {
             const label = document.createElement('label');
@@ -318,7 +472,6 @@ function buildFilterUI(world, forceReset = false) {
         });
     }
 
-    // Обработчики «Выбрать всё»
     document.querySelectorAll('.filter-section input[data-value="all"]').forEach(allCb => {
         const newAllCb = allCb.cloneNode(true);
         allCb.parentNode.replaceChild(newAllCb, allCb);
@@ -330,18 +483,15 @@ function buildFilterUI(world, forceReset = false) {
         });
     });
 
-    // Обработчики отдельных чекбоксов
     document.querySelectorAll('#filter-panel input[type="checkbox"]:not([data-value="all"])').forEach(cb => {
         cb.addEventListener('change', function(e) {
             updateDependentFilters(this.closest('.filter-section').id);
         });
     });
 
-    // Поиск
     setupSearch('author-search', 'author-checkboxes');
     setupSearch('book-search', 'book-checkboxes');
 
-    // Синхронизация "Выбрать всё"
     document.querySelectorAll('.filter-section').forEach(section => {
         const allCb = section.querySelector('input[data-value="all"]');
         if (!allCb) return;
@@ -352,7 +502,9 @@ function buildFilterUI(world, forceReset = false) {
     applyFilters();
 }
 
-// --- Поиск ---
+// ========================
+// Поиск
+// ========================
 function setupSearch(inputId, containerId) {
     const searchInput = document.getElementById(inputId);
     const container = document.getElementById(containerId);
@@ -365,7 +517,6 @@ function setupSearch(inputId, containerId) {
         applySearchFilter(containerId, query);
     });
 
-    // Сброс при перестроении
     searchInput.value = '';
     searchQueries[searchKey] = '';
     applySearchFilter(containerId, '');
@@ -381,7 +532,9 @@ function applySearchFilter(containerId, query) {
     });
 }
 
-// --- Обновление зависимых фильтров (строгое разделение) ---
+// ========================
+// Зависимые фильтры
+// ========================
 updateDependentFilters.running = false;
 
 function updateDependentFilters(changedSectionId) {
@@ -400,7 +553,7 @@ function updateDependentFilters(changedSectionId) {
         if (changedSectionId === 'filter-author') {
             const booksToSelect = new Set();
             if (selectedAuthors.length > 0) {
-                getFilteredFeatures().forEach(f => {
+                literaryData.features.filter(f => f.properties.has_night === 1).forEach(f => {
                     if (f.properties.night_book &&
                         f.properties.litraturer_array &&
                         f.properties.litraturer_array.some(a => selectedAuthors.includes(a))) {
@@ -414,7 +567,7 @@ function updateDependentFilters(changedSectionId) {
         if (changedSectionId === 'filter-book') {
             const authorsToSelect = new Set();
             if (selectedBooks.length > 0) {
-                getFilteredFeatures().forEach(f => {
+                literaryData.features.filter(f => f.properties.has_night === 1).forEach(f => {
                     if (f.properties.night_book &&
                         selectedBooks.includes(f.properties.night_book) &&
                         f.properties.litraturer_array) {
@@ -424,11 +577,6 @@ function updateDependentFilters(changedSectionId) {
             }
             updateCheckboxes('author-checkboxes', authorsToSelect);
         }
-
-        if (changedSectionId === 'filter-type') {
-            // nothing
-        }
-
     } finally {
         updateDependentFilters.running = false;
     }
@@ -452,45 +600,21 @@ function updateCheckboxes(containerId, valuesToCheck) {
     }
 }
 
-// --- Применение фильтров карты (только к одиночным точкам) ---
+// ========================
+// Применение фильтров
+// ========================
 function applyFilters() {
     if (!map.getLayer('literary-points-circle')) return;
 
     const isNight = currentWorld === 'night';
     map.setLayoutProperty('literary-points-circle', 'icon-image', ['get', isNight ? 'night_icon' : 'day_icon']);
-
-    const activeTypes = getSelectedValues('type-checkboxes');
-    const activeAuthors = getSelectedValues('author-checkboxes');
-    const activeBooks = getSelectedValues('book-checkboxes');
-
-    const worldFilter = isNight ? ['==', ['get', 'has_night'], 1] : ['==', ['get', 'has_day'], 1];
-    const typeField = isNight ? 'night_type' : 'day_type';
-
-    const typeFilter = activeTypes.length > 0
-        ? ['match', ['get', typeField], activeTypes, true, false]
-        : ['literal', false];
-
-    const authorFilter = activeAuthors.length > 0
-        ? ['any', ...activeAuthors.map(a => ['in', a, ['get', 'litraturer_array']])]
-        : ['literal', false];
-
-    let bookFilter = ['literal', true];
-    if (isNight && activeBooks.length > 0) {
-        bookFilter = ['match', ['get', 'night_book'], activeBooks, true, false];
-    } else if (isNight && activeBooks.length === 0) {
-        bookFilter = ['literal', false];
-    }
-
-    const combinedFilter = ['all', worldFilter, typeFilter, authorFilter, bookFilter];
-
-    // Применяем фильтр ТОЛЬКО к слою отдельных точек
-    map.setFilter('literary-points-circle', ['all', ['!', ['has', 'point_count']], combinedFilter]);
-
-    // Кластеры остаются без фильтра (показывают общее количество)
+    updateSourceData();
     console.log('🔍 Фильтр обновлён');
 }
 
-// --- ОТКРЫТИЕ / ЗАКРЫТИЕ СЛАЙДБАРА ---
+// ========================
+// СЛАЙДБАР
+// ========================
 function openSlidebar(props) {
     const isNight = currentWorld === 'night';
     const currentType = isNight ? props.night_type : props.day_type;
@@ -520,7 +644,29 @@ function closeSlidebar() {
 
 closeSlidebarBtn.addEventListener('click', closeSlidebar);
 
-// --- ХОВЕР-ТУЛТИП (только для одиночных точек) ---
+// ========================
+// ЦЕНТРИРОВАНИЕ
+// ========================
+function panToFeature(lngLat) {
+    const slidebarWidth = slidebar.classList.contains('slidebar-open') ? 340 : 0;
+    const padding = {
+        left: 50,
+        right: slidebarWidth + 20,
+        top: 50,
+        bottom: 50
+    };
+
+    map.easeTo({
+        center: lngLat,
+        zoom: map.getZoom(),
+        padding: padding,
+        duration: 800
+    });
+}
+
+// ========================
+// ХОВЕР-ТУЛТИП
+// ========================
 function showHoverTooltip(e) {
     const props = e.features[0].properties;
     const coords = e.lngLat;
@@ -545,7 +691,9 @@ function hideHoverTooltip() {
     hoverTooltip.style.display = 'none';
 }
 
-// --- Инициализация карты ---
+// ========================
+// Инициализация карты
+// ========================
 const map = new maplibregl.Map({
     container: 'map',
     style: fixStyle(MY_FINAL_DAY_STYLE),
@@ -554,11 +702,15 @@ const map = new maplibregl.Map({
     attributionControl: false
 });
 
-// --- Переключение тем ---
+// ========================
+// Переключение тем
+// ========================
 document.querySelectorAll('.world-btn').forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
         const world = btn.dataset.world;
         console.log('🔄 Переключение на тему:', world);
+
+        currentWorld = world;
 
         document.querySelectorAll('.world-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -567,17 +719,22 @@ document.querySelectorAll('.world-btn').forEach(btn => {
         const newStyle = (world === 'day') ? MY_FINAL_DAY_STYLE : MY_FINAL_NIGHT_STYLE;
         map.setStyle(fixStyle(newStyle));
 
-        map.once('idle', () => {
-            addLiteraryPoints();
-            const filterBook = document.getElementById('filter-book');
-            if (filterBook) filterBook.style.display = (world === 'night') ? 'block' : 'none';
-            buildFilterUI(world);
-            closeSlidebar();
-        });
+        await new Promise(resolve => map.once('idle', resolve));
+
+        await loadIcons();
+        addLiteraryPoints();
+
+        const filterBook = document.getElementById('filter-book');
+        if (filterBook) filterBook.style.display = (world === 'night') ? 'block' : 'none';
+
+        buildFilterUI(world);
+        closeSlidebar();
     };
 });
 
-// --- Первый запуск ---
+// ========================
+// Первый запуск
+// ========================
 map.on('load', async () => {
     console.log('🗺 Карта готова');
     await loadLiteraryData();
@@ -587,47 +744,6 @@ map.on('load', async () => {
     addLiteraryPoints();
     buildFilterUI('day');
     buildLegend();
-});
-
-// --- ОБРАБОТЧИКИ ДЛЯ ОДИНОЧНЫХ ТОЧЕК (ховер, клик) ---
-map.on('mouseenter', 'literary-points-circle', (e) => {
-    map.getCanvas().style.cursor = 'pointer';
-    showHoverTooltip(e);
-});
-
-map.on('mouseleave', 'literary-points-circle', () => {
-    map.getCanvas().style.cursor = '';
-    hideHoverTooltip();
-});
-
-map.on('mousemove', 'literary-points-circle', (e) => {
-    moveHoverTooltip(e);
-});
-
-map.on('click', 'literary-points-circle', (e) => {
-    const props = e.features[0].properties;
-    openSlidebar(props);
-});
-
-// --- ОБРАБОТЧИКИ ДЛЯ КЛАСТЕРОВ ---
-map.on('mouseenter', 'clusters', () => {
-    map.getCanvas().style.cursor = 'pointer';
-});
-map.on('mouseleave', 'clusters', () => {
-    map.getCanvas().style.cursor = '';
-});
-
-// При клике на кластер – увеличиваем карту, чтобы развернуть его
-map.on('click', 'clusters', (e) => {
-    const clusterId = e.features[0].properties.cluster_id;
-    const source = map.getSource('literary-points');
-    source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-        if (err) return;
-        map.easeTo({
-            center: e.features[0].geometry.coordinates,
-            zoom: zoom
-        });
-    });
 });
 
 // Закрытие слайдбара при клике на пустое место
