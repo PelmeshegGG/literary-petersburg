@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]       # замените на вашу основную ветку (master, gh-pages и т.п.)
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
 
       - name: Inject MapTiler key
         run: |
-          find . -type f -name "*.js" -exec sed -i "s/MAPTILER_LIVE_TOKEN/${{ secrets.MAPBOX_KEY }}/g" {} \;
+          find . -type f -name "*.js" -exec sed -i "s/MAPTILER_LIVE_TOKEN/${{secrets.MAPBOX_KEY}}/g" {} \;
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
