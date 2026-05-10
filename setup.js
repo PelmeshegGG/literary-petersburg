@@ -22,3 +22,4 @@ const getPathwayWidth = () => [
     "interpolate", ["linear"], ["zoom"],
     14, 0.7, 16, 0.8, 18.6, 2, 22, 5
 ];
+
