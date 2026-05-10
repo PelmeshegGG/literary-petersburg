@@ -97,44 +97,72 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', sans-
 }
 .filter-section input[type="checkbox"] { margin-right: 4px; }
 
-/* ЛЕГЕНДА (вертикальная, подписи выезжают справа) */
+.legend-item {
+    cursor: pointer;
+}
+
+.legend-item.disabled img {
+    opacity: 0.3;
+    filter: grayscale(100%);
+}
+
+/* Легенда: свернута, показываются только иконки */
 #legend-panel {
     position: absolute;
     bottom: 40px; left: 10px;
     background: rgba(255,255,255,0.9);
-    padding: 10px;
     border-radius: 6px;
     box-shadow: 0 0 10px rgba(0,0,0,0.3);
     z-index: 1500;
     display: flex;
-    flex-direction: column;   /* вертикально */
+    flex-direction: column;
     gap: 8px;
+    padding: 10px;
     font-size: 13px;
+    overflow: hidden;           /* обрезаем содержимое при сжатии */
+    white-space: nowrap;        /* запрещаем перенос строк */
+    width: fit-content;         /* ширина по содержимому */
 }
 
+/* Каждый элемент легенды */
 .legend-item {
     display: flex;
     align-items: center;
-    position: relative;
-    cursor: help;
+    gap: 0;                     /* убираем отступ между иконкой и текстом (управляется margin) */
+}
+
+/* Иконка */
+.legend-item img {
+    height: 24px; width: 24px;
+    flex-shrink: 0;            /* не даём иконке сжиматься */
+}
+
+/* Текст: скрыт по умолчанию */
+.legend-item span {
+    margin-left: 5px;
+    font-size: 12px;
+    color: #222;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.3s ease, opacity 0.2s ease;
+    display: inline-block;
+}
+
+/* При наведении на ВСЮ легенду — показываем все подписи */
+#legend-panel:hover .legend-item span {
+    max-width: 200px;   /* достаточная ширина для любого названия */
+    opacity: 1;
 }
 
 .legend-item img {
     height: 24px; width: 24px;
 }
 
-.legend-tooltip {
+.legend-item span {
     margin-left: 5px;
-    max-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    transition: max-width 0.4s ease;
     font-size: 12px;
     color: #222;
-}
-
-.legend-item:hover .legend-tooltip {
-    max-width: 200px;  /* текст раскрывается */
 }
 
 /* СЛАЙДБАР */
@@ -198,4 +226,9 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', sans-
 }
 #reset-filters-btn:hover {
     background: #8B1A14;
+}
+
+/* Скрываем секцию "Тип" из панели фильтров (управляется через легенду) */
+#filter-type {
+    display: none;
 }

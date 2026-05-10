@@ -2,7 +2,7 @@
 // НАСТРОЙКИ КЛАСТЕРИЗАЦИИ (меняйте смело)
 // ========================
 const CLUSTER_MAX_ZOOM = 15;   // максимальный зум, на котором ещё работают кластеры
-const CLUSTER_RADIUS = 20;     // радиус объединения точек в пикселях
+const CLUSTER_RADIUS = 25;     // радиус объединения точек в пикселях
 
 // ========================
 // Функция-лечилка стилей
@@ -499,6 +499,25 @@ function buildFilterUI(world, forceReset = false) {
         allCb.checked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
     });
 
+    // Установка типов по умолчанию
+    const defaultTypes = world === 'night'
+        ? ['Место действия', 'Ориентир']
+        : ['Захоронение', 'Памятник', 'Мемориальная табличка'];
+
+    const typeCheckboxes = document.querySelectorAll('#type-checkboxes input[type="checkbox"]:not([data-value="all"])');
+    typeCheckboxes.forEach(cb => {
+        cb.checked = defaultTypes.includes(cb.dataset.value);
+    });
+
+    updateTypeAllCheckbox();
+    
+    // синхронизация master-чекбокса "Выбрать всё"
+    const typeAllCb = document.querySelector('#filter-type input[data-value="all"]');
+    if (typeAllCb) {
+        const allChecked = Array.from(typeCheckboxes).every(cb => cb.checked);
+        typeAllCb.checked = allChecked;
+    }
+
     applyFilters();
 }
 
@@ -609,6 +628,7 @@ function applyFilters() {
     const isNight = currentWorld === 'night';
     map.setLayoutProperty('literary-points-circle', 'icon-image', ['get', isNight ? 'night_icon' : 'day_icon']);
     updateSourceData();
+    syncLegendState();  // <-- добавить
     console.log('🔍 Фильтр обновлён');
 }
 
@@ -728,6 +748,7 @@ document.querySelectorAll('.world-btn').forEach(btn => {
         if (filterBook) filterBook.style.display = (world === 'night') ? 'block' : 'none';
 
         buildFilterUI(world);
+        buildLegend(world);
         closeSlidebar();
     };
 });
@@ -743,7 +764,7 @@ map.on('load', async () => {
     await loadIcons();
     addLiteraryPoints();
     buildFilterUI('day');
-    buildLegend();
+    buildLegend('day');
 });
 
 // Закрытие слайдбара при клике на пустое место
@@ -755,27 +776,72 @@ map.on('click', (e) => {
 });
 
 // --- Легенда ---
-function buildLegend() {
+function buildLegend(world) {
     const panel = document.getElementById('legend-panel');
     if (!panel) return;
     panel.innerHTML = '';
-    const types = Object.keys(TYPE_TO_ICON);
-    types.forEach(type => {
+
+    const allowedTypes = world === 'night'
+        ? ['Место действия', 'Ориентир']
+        : ['Захоронение', 'Памятник', 'Мемориальная табличка'];
+
+    allowedTypes.forEach(type => {
+        const iconFile = TYPE_TO_ICON[type];
+        if (!iconFile) return;
         const item = document.createElement('div');
         item.className = 'legend-item';
+        item.dataset.type = type;
+
         const img = document.createElement('img');
-        img.src = `icons/${TYPE_TO_ICON[type]}.svg`;
-        img.onerror = () => { img.src = 'data:image/svg+xml;base64,...'; };
-        const tooltip = document.createElement('span');
-        tooltip.className = 'legend-tooltip';
-        tooltip.textContent = type;
+        img.src = `icons/${iconFile}.svg`;
+        img.onerror = () => { img.src = 'data:image/svg+xml,...'; };
+
+        const label = document.createElement('span');
+        label.textContent = type;
+
         item.appendChild(img);
-        item.appendChild(tooltip);
+        item.appendChild(label);
+
+        item.addEventListener('click', () => {
+            const cb = document.querySelector(`#type-checkboxes input[data-value="${type}"]`);
+            if (cb) {
+                cb.checked = !cb.checked;
+                updateTypeAllCheckbox();
+                applyFilters();
+                syncLegendState();
+            }
+        });
+
         panel.appendChild(item);
+    });
+
+    syncLegendState();
+}
+
+function updateTypeAllCheckbox() {
+    const allCb = document.querySelector('#filter-type input[data-value="all"]');
+    if (!allCb) return;
+    const checkboxes = document.querySelectorAll('#type-checkboxes input[type="checkbox"]:not([data-value="all"])');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    allCb.checked = allChecked;
+}
+
+function syncLegendState() {
+    document.querySelectorAll('.legend-item').forEach(item => {
+        const type = item.dataset.type;
+        const cb = document.querySelector(`#type-checkboxes input[data-value="${type}"]`);
+        if (cb) {
+            if (cb.checked) {
+                item.classList.remove('disabled');
+            } else {
+                item.classList.add('disabled');
+            }
+        }
     });
 }
 
 // --- Кнопка сброса фильтров ---
 document.getElementById('reset-filters-btn').addEventListener('click', () => {
     buildFilterUI(currentWorld, true);
+    buildLegend(currentWorld);
 });
