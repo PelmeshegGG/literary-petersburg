@@ -1,7 +1,7 @@
 // setup.js
 
 // 1. Твой API Ключ
-const MAPTILER_KEY = 'SiKXQiPPcikFoOYWeHuc';
+const MAPTILER_KEY = 'MAPBOX_KEY';
 
 // 2. Динамические настройки ширины дорог (из твоих исходников)
 const getRoadOutlineWidth = () => [
