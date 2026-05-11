@@ -14,8 +14,12 @@
         <div class="header-container">
             <div id="header-title">Литературный Петербург</div>
             <div id="world-selector">
-                <button class="world-btn active" data-world="day">Быль ☀️</button>
-                <button class="world-btn" data-world="night">Сказка 🌙</button>
+                <button class="world-btn active" data-world="day">
+                    <img src="icons/den.svg" class="world-icon" alt="">Быль
+                </button>
+                <button class="world-btn" data-world="night">
+                    <img src="icons/noch.svg" class="world-icon" alt="">Сказка
+                </button>
             </div>
             <div style="width: 45px;"></div>
         </div>
@@ -25,7 +29,6 @@
         <div id="map"></div>
     </main>
 
-    <!-- СЛАЙДБАР (выезжающая панель) -->
     <div id="slidebar" class="slidebar-closed">
         <div class="slidebar-header">
             <button id="close-slidebar">✕</button>
@@ -33,7 +36,6 @@
         <div id="slidebar-content"></div>
     </div>
 
-    <!-- ХОВЕР-ТУЛТИП (мини-фото + название) -->
     <div id="hover-tooltip" style="display:none; position:absolute; background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.3); padding:8px; z-index:3000; pointer-events:none;">
         <img id="hover-img" src="" alt="" style="max-width:120px; border-radius:4px; display:block;">
         <div id="hover-name" style="font-size:12px; margin-top:4px; text-align:center;"></div>
@@ -47,7 +49,6 @@
         </div>
     </footer>
 
-    <!-- ПАНЕЛЬ ФИЛЬТРОВ -->
     <div id="filter-panel">
         <h4>Фильтры</h4>
         <div class="filter-section" id="filter-type">
@@ -58,19 +59,24 @@
         <div class="filter-section" id="filter-author">
             <strong>Автор</strong>
             <label><input type="checkbox" checked data-filter="litraturer" data-value="all"> Выбрать всё</label>
-            <input type="text" id="author-search" placeholder="🔍 Поиск автора" style="width:100%; margin:4px 0; padding:4px; font-size:12px; box-sizing:border-box;">
+            <div class="search-wrapper">
+                <img src="icons/poisk.svg" class="search-icon" alt="">
+                <input type="text" id="author-search" placeholder="Поиск автора" style="width:100%; margin:4px 0; padding:4px; font-size:12px; box-sizing:border-box;">
+            </div>
             <div id="author-checkboxes" style="max-height:150px; overflow-y:auto; border:1px solid #ddd; padding:4px; border-radius:4px;"></div>
         </div>
         <div class="filter-section" id="filter-book" style="display:none;">
             <strong>Книга</strong>
             <label><input type="checkbox" checked data-filter="night_book" data-value="all"> Выбрать всё</label>
-            <input type="text" id="book-search" placeholder="🔍 Поиск книги" style="width:100%; margin:4px 0; padding:4px; font-size:12px; box-sizing:border-box;">
+            <div class="search-wrapper">
+                <img src="icons/poisk.svg" class="search-icon" alt="">
+                <input type="text" id="book-search" placeholder="Поиск книги" style="width:100%; margin:4px 0; padding:4px; font-size:12px; box-sizing:border-box;">
+            </div>
             <div id="book-checkboxes" style="max-height:120px; overflow-y:auto; border:1px solid #ddd; padding:4px; border-radius:4px;"></div>
         </div>
         <button id="reset-filters-btn" style="margin-top:8px; width:100%;">Сбросить фильтры</button>
     </div>
 
-    <!-- ЛЕГЕНДА (иконки) -->
     <div id="legend-panel"></div>
 
     <script src="setup.js"></script>
