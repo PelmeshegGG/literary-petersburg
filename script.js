@@ -640,11 +640,11 @@ function updateCategoryColorIndicators() {
     const colorMap = window._lastCategoryColors || {};
     document.querySelectorAll('#author-checkboxes input[type="checkbox"]').forEach(cb => {
         const cat = cb.dataset.value;
-        cb.style.accentColor = colorMap[cat] || '#9e9e9e';
+        cb.style.accentColor = colorMap[cat] || '#F5F5F5';
     });
     document.querySelectorAll('#book-checkboxes input[type="checkbox"]').forEach(cb => {
         const cat = cb.dataset.value;
-        cb.style.accentColor = colorMap[cat] || '#9e9e9e';
+        cb.style.accentColor = colorMap[cat] || '#F5F5F5';
     });
 }
 
