@@ -753,3 +753,29 @@ document.getElementById('reset-filters-btn').addEventListener('click', () => {
     buildLegend(currentWorld);
     updateCategoryColors();
 });
+
+const infoBtn = document.getElementById('info-btn');
+const infoModal = document.getElementById('info-modal');
+const closeModalBtn = document.getElementById('close-modal');
+
+infoBtn.addEventListener('click', () => {
+    infoModal.style.display = 'flex';
+});
+closeModalBtn.addEventListener('click', () => {
+    infoModal.style.display = 'none';
+});
+infoModal.addEventListener('click', (e) => {
+    if (e.target === infoModal) infoModal.style.display = 'none';
+});
+
+const cookieBanner = document.getElementById('cookie-banner');
+const acceptCookiesBtn = document.getElementById('accept-cookies');
+
+if (localStorage.getItem('cookiesAccepted')) {
+    cookieBanner.style.display = 'none';
+}
+
+acceptCookiesBtn.addEventListener('click', () => {
+    localStorage.setItem('cookiesAccepted', '1');
+    cookieBanner.style.display = 'none';
+});
