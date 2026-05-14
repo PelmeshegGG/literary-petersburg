@@ -35,7 +35,8 @@ html, body {
 
 #header-title {
     font-weight: bold;
-    font-size: 1.2rem;
+    font-size: 1.8rem;
+    font-family: 'Playfair Display', 'Segoe UI', serif;
 }
 
 #world-selector {
@@ -250,6 +251,9 @@ html, body {
 }
 
 #slidebar h3 {
+    font-family: 'Playfair Display', 'Segoe UI', serif;
+    font-weight: 700;
+    font-size: 20px;
     margin-top: 0;
     color: var(--spbu-red);
 }
