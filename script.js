@@ -429,21 +429,25 @@ function addLiteraryPoints() {
     map.on('mouseleave', 'clusters', clusterHoverLeave);
 
     clusterClickHandler = (e) => {
-        if (!e.features?.length) return;
-        map.getSource('literary-points').getClusterExpansionZoom(
-            e.features[0].properties.cluster_id,
-            (err, zoom) => {
-                if (err) return;
-                map.easeTo({
-                    center: e.features[0].geometry.coordinates,
-                    zoom: zoom,
-                    padding: { left: 30, right: 30, top: 30, bottom: 30 },
-                    duration: 800
-                });
-            }
-        );
-    };
-    map.on('click', 'clusters', clusterClickHandler);
+    if (!e.features?.length) return;
+    const clusterId = e.features[0].properties.cluster_id;
+    const coordinates = [...e.features[0].geometry.coordinates];
+    
+    map.getSource('literary-points').getClusterExpansionZoom(
+        clusterId,
+        (err, zoom) => {
+            if (err) return;
+            map.easeTo({
+                center: coordinates,
+                zoom: zoom,
+                padding: { left: 30, right: 30, top: 30, bottom: 30 },
+                duration: 800
+            });
+        }
+    );
+};
+map.on('click', 'clusters', clusterClickHandler);
+map.on('click', 'cluster-count', clusterClickHandler);
 }
 
 function getUniqueTypes(world) {
@@ -752,30 +756,4 @@ document.getElementById('reset-filters-btn').addEventListener('click', () => {
     buildFilterUI(currentWorld, true);
     buildLegend(currentWorld);
     updateCategoryColors();
-});
-
-const infoBtn = document.getElementById('info-btn');
-const infoModal = document.getElementById('info-modal');
-const closeModalBtn = document.getElementById('close-modal');
-
-infoBtn.addEventListener('click', () => {
-    infoModal.style.display = 'flex';
-});
-closeModalBtn.addEventListener('click', () => {
-    infoModal.style.display = 'none';
-});
-infoModal.addEventListener('click', (e) => {
-    if (e.target === infoModal) infoModal.style.display = 'none';
-});
-
-const cookieBanner = document.getElementById('cookie-banner');
-const acceptCookiesBtn = document.getElementById('accept-cookies');
-
-if (localStorage.getItem('cookiesAccepted')) {
-    cookieBanner.style.display = 'none';
-}
-
-acceptCookiesBtn.addEventListener('click', () => {
-    localStorage.setItem('cookiesAccepted', '1');
-    cookieBanner.style.display = 'none';
 });
